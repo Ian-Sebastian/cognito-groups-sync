@@ -8,15 +8,6 @@ import fs, { WriteStream } from 'fs';
 const COGNITO_READ_LIMIT_DEFAULT = 60;
 const ENABLE_CSV_REPORT_DEFAULT = false;
 
-// Non I/O  blocking pause
-async function sleep(millisecond) {
-  return await new Promise((r, _) => {
-    setTimeout(() => {
-      return r(true);
-    }, millisecond);
-  });
-}
-
 class ConfigurationService {
   private secretManager: SecretsManager;
   private secretManagerId: string;
@@ -204,8 +195,7 @@ class CognitoService {
           return this.reportingApi.appendRecord(username, roles, null);
         } catch (err) {
           console.error('Oops! something happened', err);
-          this.reportingApi.appendRecord(username, roles, err);
-          return null;
+          return this.reportingApi.appendRecord(username, roles, err);
         }
       }),
     );
@@ -220,9 +210,10 @@ class ReportingService {
   constructor(configurationService: ConfigurationService) {
     this.enableReport = configurationService.enableCsvReport;
     if (!configurationService.enableCsvReport) return;
-    this.writeStream = fs.createWriteStream(`report_${new Date().toISOString()}.csv`, {
-      flags: 'a',
-    });
+    // this.writeStream = fs.createWriteStream(`report_${new Date().toISOString()}.csv`, {
+    //   flags: 'a',
+    // });
+    this.writeStream = fs.createWriteStream(`cognito_groups_sync_report.csv`);
     this.writer = CsvWriter({ headers: ['username', 'roles', 'error'] });
     this.writer.pipe(this.writeStream);
     ReportingService.instance = this;
@@ -303,7 +294,7 @@ async function cliWrapper() {
 }
 
 async function main(secretManagerId: string, cognitoReadLimit: number, enableCsvReport: boolean) {
-  console.time('main');
+  console.time('timeTook');
   const configurationService = await ConfigurationService.factory(
     secretManagerId,
     cognitoReadLimit,
@@ -317,14 +308,7 @@ async function main(secretManagerId: string, cognitoReadLimit: number, enableCsv
   let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
   let counter = 0;
   do {
-    // cognitoResponse = await cognitoService.listUsers(paginationToken);
-    cognitoResponse = {
-      Users: [{ Username: '006f01d0-98a9-49bd-9609-7c360c9d3159' }],
-      PaginationToken: null,
-      $response: {
-        hasNextPage: () => false,
-      } as any,
-    };
+    cognitoResponse = await cognitoService.listUsers(paginationToken);
     paginationToken = cognitoResponse.PaginationToken;
     console.log(cognitoResponse.Users);
     await Promise.all(
@@ -336,7 +320,7 @@ async function main(secretManagerId: string, cognitoReadLimit: number, enableCsv
       }),
     );
   } while (cognitoResponse.$response.hasNextPage());
-  console.timeEnd('main');
+  console.timeEnd('timeTook');
   console.log('Users processed: ', counter);
   return;
 }
