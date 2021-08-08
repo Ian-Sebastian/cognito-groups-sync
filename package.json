@@ -5,8 +5,9 @@
   "main": "fixCognitoGroupUsers.ts",
   "scripts": {
     "build": "rimraf ./build && tsc",
-    "start": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development",
-    "start5": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=10 --enableCsvReport=true",
+    "start:prod": "rimraf ./build && tsc",
+    "start:dev": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development",
+    "start:dev5": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=10 --enableCsvReport=true",
     "start:debug": "node --inspect -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=60 --enableCsvReport=true",
     "start:withReport": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=60 --enableCsvReport=true"
   },

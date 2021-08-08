@@ -10,6 +10,12 @@ Defines which secret manager to use according to the environment value passed.
 
 Defines the cognito read operations limit for listing users. Defaults to maximum of 60 per iteration
 
+
+`--paginationToken= PAGINATION TOKEN TO START`
+
+Indicate cognito the pagination position to start. Defaults to null.
+
+
 `--enableCsvReport=<true | false>`
 
 Enables csv `cognito_groups_sync_report.csv` report generation through fileStreamWritter piping. Defaults to false. 
