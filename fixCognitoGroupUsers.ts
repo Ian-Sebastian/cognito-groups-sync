@@ -2,8 +2,10 @@ import minimist, { ParsedArgs } from 'minimist';
 import { AWSError, CognitoIdentityServiceProvider, SecretsManager } from 'aws-sdk';
 import { Connection, createConnection } from 'typeorm';
 import { PromiseResult } from 'aws-sdk/lib/request';
-import CsvWriter from 'csv-write-stream';
+// import * as CsvWriter from 'csv-write-stream';
 import fs, { WriteStream } from 'fs';
+
+const CsvWriter = require('csv-write-stream')
 
 const COGNITO_READ_LIMIT_DEFAULT = 60;
 const ENABLE_CSV_REPORT_DEFAULT = false;
@@ -46,6 +48,7 @@ class ConfigurationService {
   // public interface below this line
 
   public get(key: string) {
+    // @ts-ignore
     return this.secrets[key];
   }
 }
@@ -81,7 +84,7 @@ class DatabaseService {
       database: this.databaseConfiguration.database,
       username: this.databaseConfiguration.username,
       password: this.databaseConfiguration.password,
-      logging: true,
+      logging: false,
     });
   }
 
@@ -159,12 +162,13 @@ class CognitoService {
     });
     this.reportingApi = reportingService;
     this.userPoolId = configurationService.get('AWS_NEW_USER_POOL_ID');
-    this.userReadLimit = COGNITO_READ_LIMIT_DEFAULT;
+    this.userReadLimit = configurationService.cognitoReadLimit || COGNITO_READ_LIMIT_DEFAULT;
   }
 
   public async listUsers(paginationToken?: string) {
+    const AttributesToGet: [] = [];
     const params = {
-      AttributesToGet: [],
+      AttributesToGet,
       Filter: '',
       Limit: this.userReadLimit,
       PaginationToken: paginationToken || null,
@@ -180,7 +184,7 @@ class CognitoService {
       return;
     }
 
-    console.info(`Patching ${username} with ${roles}`);
+    console.info(`Time: ${Date.now()} - Patching ${username} with ${roles}` );
 
     return Promise.all(
       roles.map(async (role) => {
@@ -219,7 +223,7 @@ class ReportingService {
     ReportingService.instance = this;
   }
 
-  public appendRecord(username: string, roles: string[], error: any) {
+  public appendRecord(username: string, roles: string[], error: any):void {
     if (!this.enableReport) return null;
     this.writer.write([username, roles, error]);
   }
@@ -285,7 +289,17 @@ async function cliWrapper() {
       enableCsvReport = args.enableCsvReport === 'true' ? true : false;
     }
 
-    await main(secretManagerId, cognitoReadLimit, enableCsvReport);
+    let paginationToken: string;
+    if (!args.paginationToken) {
+      console.info(
+          `--paginationToken, defaulting to null`,
+      );
+      paginationToken = null;
+    } else {
+      paginationToken = args.paginationToken;
+    }
+
+    await main(secretManagerId, cognitoReadLimit, enableCsvReport, paginationToken);
   } catch (error) {
     console.error('Oops! something went wrong', error);
   } finally {
@@ -293,8 +307,8 @@ async function cliWrapper() {
   }
 }
 
-async function main(secretManagerId: string, cognitoReadLimit: number, enableCsvReport: boolean) {
-  console.time('timeTook');
+async function main(secretManagerId: string, cognitoReadLimit: number, enableCsvReport: boolean, paginationTokenContinue: string) {
+    console.time('timeTook');
   const configurationService = await ConfigurationService.factory(
     secretManagerId,
     cognitoReadLimit,
@@ -304,17 +318,19 @@ async function main(secretManagerId: string, cognitoReadLimit: number, enableCsv
   const reportingService = new ReportingService(configurationService);
   const cognitoService = new CognitoService(configurationService, reportingService);
 
-  let paginationToken: string = null;
+  let paginationToken: string = paginationTokenContinue;
   let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
   let counter = 0;
   do {
     cognitoResponse = await cognitoService.listUsers(paginationToken);
+    console.info(`===>> paginationToken iterations: ${paginationToken}`,
+    );
     paginationToken = cognitoResponse.PaginationToken;
-    console.log(cognitoResponse.Users);
+    //console.log(cognitoResponse.Users);
     await Promise.all(
       cognitoResponse.Users.map(async (user) => {
         const roles = await databaseService.getUserRoles(user.Username);
-        console.log(roles);
+        //console.log(roles);
         counter++;
         return cognitoService.addUserToGroups(user.Username, roles);
       }),
