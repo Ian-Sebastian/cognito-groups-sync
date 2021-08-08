@@ -20,5 +20,11 @@ Indicate cognito the pagination position to start. Defaults to null.
 
 Enables csv `cognito_groups_sync_report.csv` report generation through fileStreamWritter piping. Defaults to false. 
 
+Example :
+
+`--environment=production --cognitoReadLimit=60 --enableCsvReport=true`
+
+`--environment=development --cognitoReadLimit=60 --enableCsvReport=true`
+
 ---
 
