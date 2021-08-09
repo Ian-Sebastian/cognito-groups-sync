@@ -20,11 +20,17 @@ Indicate cognito the pagination position to start. Defaults to null.
 
 Enables csv `cognito_groups_sync_report.csv` report generation through fileStreamWritter piping. Defaults to false. 
 
+
+`--cognitoGroupsOperationsPerSec=20"`
+
+Controls how many Cognito groups operations should be done per second. Defaults to 20
+
+
 Example :
 
-`--environment=production --cognitoReadLimit=60 --enableCsvReport=true`
+`--environment=production --cognitoReadLimit=60 --enableCsvReport=true `
 
-`--environment=development --cognitoReadLimit=60 --enableCsvReport=true`
+`--environment=development --cognitoReadLimit=60 --enableCsvReport=true --cognitoGroupsOperationsPerSec=20`
 
 ---
 

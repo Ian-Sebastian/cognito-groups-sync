@@ -5,10 +5,20 @@ import { PromiseResult } from 'aws-sdk/lib/request';
 // import * as CsvWriter from 'csv-write-stream';
 import fs, { WriteStream } from 'fs';
 
-const CsvWriter = require('csv-write-stream')
+const CsvWriter = require('csv-write-stream');
 
 const COGNITO_READ_LIMIT_DEFAULT = 60;
+const COGNITO_GROUP_OPERATIONS_PER_SEC_DEFAULT = 20;
 const ENABLE_CSV_REPORT_DEFAULT = false;
+
+// Non I/O  blocking pause
+async function sleep(millisecond: number): Promise<void> {
+  return await new Promise((r, _) => {
+    setTimeout(() => {
+      return r();
+    }, millisecond);
+  });
+}
 
 class ConfigurationService {
   private secretManager: SecretsManager;
@@ -184,7 +194,7 @@ class CognitoService {
       return;
     }
 
-    console.info(`Time: ${Date.now()} - Patching ${username} with ${roles}` );
+    console.info(`Time: ${Date.now()} - Patching ${username} with ${roles}`);
 
     return Promise.all(
       roles.map(async (role) => {
@@ -223,7 +233,7 @@ class ReportingService {
     ReportingService.instance = this;
   }
 
-  public appendRecord(username: string, roles: string[], error: any):void {
+  public appendRecord(username: string, roles: string[], error: any): void {
     if (!this.enableReport) return null;
     this.writer.write([username, roles, error]);
   }
@@ -242,6 +252,8 @@ interface inputParams extends ParsedArgs {
   environment: string;
   cognitoReadLimit: number;
   enableCsvReport: string;
+  paginationToken: string;
+  cognitoGroupsOperationsPerSec: number;
 }
 
 async function cliWrapper() {
@@ -291,15 +303,27 @@ async function cliWrapper() {
 
     let paginationToken: string;
     if (!args.paginationToken) {
-      console.info(
-          `--paginationToken, defaulting to null`,
-      );
+      console.info(`--paginationToken, defaulting to null`);
       paginationToken = null;
     } else {
       paginationToken = args.paginationToken;
     }
 
-    await main(secretManagerId, cognitoReadLimit, enableCsvReport, paginationToken);
+    let cognitoGroupsOperationsPerSec: number;
+    if (!args.cognitoGroupsOperationsPerSec) {
+      console.info(`--cognitoGroupsOperationsPerSec, defaulting to 20`);
+      cognitoGroupsOperationsPerSec = COGNITO_GROUP_OPERATIONS_PER_SEC_DEFAULT;
+    } else {
+      cognitoGroupsOperationsPerSec = args.cognitoGroupsOperationsPerSec;
+    }
+
+    await main(
+      secretManagerId,
+      cognitoReadLimit,
+      enableCsvReport,
+      paginationToken,
+      cognitoGroupsOperationsPerSec,
+    );
   } catch (error) {
     console.error('Oops! something went wrong', error);
   } finally {
@@ -307,8 +331,14 @@ async function cliWrapper() {
   }
 }
 
-async function main(secretManagerId: string, cognitoReadLimit: number, enableCsvReport: boolean, paginationTokenContinue: string) {
-    console.time('timeTook');
+async function main(
+  secretManagerId: string,
+  cognitoReadLimit: number,
+  enableCsvReport: boolean,
+  paginationTokenContinue: string,
+  cognitoGroupsOperationsPerSec: number,
+) {
+  console.time('timeTook');
   const configurationService = await ConfigurationService.factory(
     secretManagerId,
     cognitoReadLimit,
@@ -322,19 +352,30 @@ async function main(secretManagerId: string, cognitoReadLimit: number, enableCsv
   let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
   let counter = 0;
   do {
+    const readUsersTresholder = sleep(1000); // creates async timer that we'd await later
+
     cognitoResponse = await cognitoService.listUsers(paginationToken);
-    console.info(`===>> paginationToken iterations: ${paginationToken}`,
-    );
+    console.info(`===>> paginationToken iterations: ${paginationToken}`);
     paginationToken = cognitoResponse.PaginationToken;
     //console.log(cognitoResponse.Users);
-    await Promise.all(
-      cognitoResponse.Users.map(async (user) => {
-        const roles = await databaseService.getUserRoles(user.Username);
-        //console.log(roles);
-        counter++;
-        return cognitoService.addUserToGroups(user.Username, roles);
-      }),
-    );
+
+    /**
+     * - map each user operation to a promise
+     * - chain each promise with reduce
+     * - await reduced return before next batch
+     */
+    await cognitoResponse.Users.map(async (user) => {
+      const roles = await databaseService.getUserRoles(user.Username);
+      console.log(roles);
+      return { username: user.Username, roles };
+    }).reduce(async (previousPromise, currentUserPromise) => {
+      await previousPromise;
+      const { username, roles } = await currentUserPromise;
+      await cognitoService.addUserToGroups(username, roles);
+      return await sleep(1000 / cognitoGroupsOperationsPerSec);
+    }, Promise.resolve());
+
+    await readUsersTresholder; // await in case all operations are processed before 1 second passes
   } while (cognitoResponse.$response.hasNextPage());
   console.timeEnd('timeTook');
   console.log('Users processed: ', counter);

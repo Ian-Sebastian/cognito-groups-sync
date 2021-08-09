@@ -8,7 +8,7 @@
     "start:prod": "rimraf ./build && tsc",
     "start:dev": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development",
     "start:dev5": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=10 --enableCsvReport=true",
-    "start:debug": "node --inspect -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=60 --enableCsvReport=true",
+    "start:debug": "node --inspect -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=5 --enableCsvReport=true --cognitoGroupsOperationsPerSec=20",
     "start:withReport": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=60 --enableCsvReport=true"
   },
   "author": "Ian Sebastian",
