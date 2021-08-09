@@ -357,7 +357,7 @@ async function main(
     cognitoResponse = await cognitoService.listUsers(paginationToken);
     console.info(`===>> paginationToken iterations: ${paginationToken}`);
     paginationToken = cognitoResponse.PaginationToken;
-    //console.log(cognitoResponse.Users);
+    // console.log(cognitoResponse.Users);
 
     /**
      * - map each user operation to a promise
@@ -366,7 +366,7 @@ async function main(
      */
     await cognitoResponse.Users.map(async (user) => {
       const roles = await databaseService.getUserRoles(user.Username);
-      console.log(roles);
+      // console.log(roles);
       return { username: user.Username, roles };
     }).reduce(async (previousPromise, currentUserPromise) => {
       await previousPromise;
