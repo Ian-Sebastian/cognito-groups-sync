@@ -32,5 +32,7 @@ Example :
 
 `--environment=development --cognitoReadLimit=60 --enableCsvReport=true --cognitoGroupsOperationsPerSec=20`
 
+`--environment=development --cognitoReadLimit=1 --enableCsvReport=true --cognitoGroupsOperationsPerSec=20 --maxReadCognitoLoops=2 --paginationToken=TOKEN",
+`
 ---
 

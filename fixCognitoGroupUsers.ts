@@ -9,6 +9,7 @@ const CsvWriter = require('csv-write-stream');
 
 const COGNITO_READ_LIMIT_DEFAULT = 60;
 const COGNITO_GROUP_OPERATIONS_PER_SEC_DEFAULT = 20;
+const MAX_LOOP_ITERATIONS_DEFAULT = 400;
 const ENABLE_CSV_REPORT_DEFAULT = false;
 
 // Non I/O  blocking pause
@@ -254,6 +255,7 @@ interface inputParams extends ParsedArgs {
   enableCsvReport: string;
   paginationToken: string;
   cognitoGroupsOperationsPerSec: number;
+  maxReadCognitoLoops: number;
 }
 
 async function cliWrapper() {
@@ -317,12 +319,22 @@ async function cliWrapper() {
       cognitoGroupsOperationsPerSec = args.cognitoGroupsOperationsPerSec;
     }
 
+    let maxReadCognitoLoops: number; //400
+    if (!args.maxReadCognitoLoops) {
+      console.info(`--maxReadCognitoLoops, defaulting to ${MAX_LOOP_ITERATIONS_DEFAULT}`);
+      maxReadCognitoLoops = MAX_LOOP_ITERATIONS_DEFAULT;
+    } else {
+      maxReadCognitoLoops = args.maxReadCognitoLoops;
+    }
+
+
     await main(
       secretManagerId,
       cognitoReadLimit,
       enableCsvReport,
       paginationToken,
       cognitoGroupsOperationsPerSec,
+      maxReadCognitoLoops,
     );
   } catch (error) {
     console.error('Oops! something went wrong', error);
@@ -337,6 +349,7 @@ async function main(
   enableCsvReport: boolean,
   paginationTokenContinue: string,
   cognitoGroupsOperationsPerSec: number,
+  maxReadCognitoLoops: number,
 ) {
   console.time('timeTook');
   const configurationService = await ConfigurationService.factory(
@@ -351,6 +364,7 @@ async function main(
   let paginationToken: string = paginationTokenContinue;
   let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
   let counter = 0;
+  let currentIteration = 1;
   do {
     const readUsersTresholder = sleep(1000); // creates async timer that we'd await later
 
@@ -376,7 +390,8 @@ async function main(
     }, Promise.resolve());
 
     await readUsersTresholder; // await in case all operations are processed before 1 second passes
-  } while (cognitoResponse.$response.hasNextPage());
+    currentIteration ++;
+  } while (currentIteration <= maxReadCognitoLoops && cognitoResponse.$response.hasNextPage());
   console.timeEnd('timeTook');
   console.log('Users processed: ', counter);
   return;
