@@ -7,7 +7,7 @@
     "build": "rimraf ./build && tsc",
     "start:prod": "rimraf ./build && tsc",
     "start:dev": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development",
-    "start:dev5": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=10 --enableCsvReport=true",
+    "start:dev:csv": "node --inspect -r ts-node/register fixCognitoGroupUsers.ts --csv='./data/401_users.csv' --environment=development --enableCsvReport=true",
     "start:devLimit": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=1 --enableCsvReport=true --maxReadCognitoLoops=2 --paginationToken=CAISlAIIARLtAQgDEugBAMeMmMK20fv7pLMcsdajzsbqPlTZkcFOMY9q88S9R5k/eyJAbiI6IlBhZ2luYXRpb25Db250aW51YXRpb25EVE8iLCJuZXh0S2V5IjoiQUFBQUFBQUFEaUU1QVFFQmhDVTZDMWxvUk5PenEwbm9ZNm9xWFQxdHlqSmZBRTllb1hvTmlMUm1WdGxsYm1ZN01EQmpZakE1T0dVdFkyRTJPUzAwTURWbUxUa3dZemd0WmpBNVlXWXpNekZpT1dVeU93PT0iLCJwcmV2aW91c1JlcXVlc3RUaW1lIjoxNjI4Njk5Nzc1MzcwfRogg4a0p0H0GhkSkTnyG/MK4roQ5wkgOl7BlO+fGNTupTk=",
     "start:debug": "node --inspect -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=5 --enableCsvReport=true --cognitoGroupsOperationsPerSec=20",
     "start:withReport": "node -r ts-node/register fixCognitoGroupUsers.ts --environment=development --cognitoReadLimit=60 --enableCsvReport=true"
