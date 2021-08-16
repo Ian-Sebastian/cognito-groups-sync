@@ -368,48 +368,67 @@ async function main(
   const cognitoService = new CognitoService(configurationService, reportingService);
 
   if (csvFilePath) {
-    await mainCsvInput(csvFilePath, cognitoReadLimit, cognitoGroupsOperationsPerSec, {
+    await withCsvInput(csvFilePath, cognitoReadLimit, cognitoGroupsOperationsPerSec, {
       cognitoService: cognitoService,
       configurationService: configurationService,
       databaseService: databaseService,
       reportingService: reportingService,
     });
   } else {
-    let paginationToken: string = paginationTokenContinue;
-    let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
-    let counter = 0;
-    let currentIteration = 1;
-    do {
-      const readUsersTresholder = sleep(1000); // creates async timer that we'd await later
-
-      cognitoResponse = await cognitoService.listUsers(paginationToken);
-      console.info(`===>> paginationToken iterations: ${paginationToken}`);
-      paginationToken = cognitoResponse.PaginationToken;
-      // console.log(cognitoResponse.Users);
-
-      /**
-       * - map each user operation to a promise
-       * - chain each promise with reduce
-       * - await reduced return before next batch
-       */
-      await cognitoResponse.Users.map(async (user) => {
-        const roles = await databaseService.getUserRoles(user.Username);
-        // console.log(roles);
-        return { username: user.Username, roles };
-      }).reduce(async (previousPromise, currentUserPromise) => {
-        await previousPromise;
-        const { username, roles } = await currentUserPromise;
-        await cognitoService.addUserToGroups(username, roles);
-        return await sleep(1000 / cognitoGroupsOperationsPerSec);
-      }, Promise.resolve());
-
-      await readUsersTresholder; // await in case all operations are processed before 1 second passes
-      currentIteration++;
-    } while (currentIteration <= maxReadCognitoLoops && cognitoResponse.$response.hasNextPage());
-    console.log('Users processed: ', counter);
+    await withCognitoInput(
+      paginationTokenContinue,
+      maxReadCognitoLoops,
+      cognitoGroupsOperationsPerSec,
+      {
+        cognitoService: cognitoService,
+        configurationService: configurationService,
+        databaseService: databaseService,
+        reportingService: reportingService,
+      },
+    );
   }
   console.timeEnd('timeTook');
   return;
+}
+
+async function withCognitoInput(
+  paginationTokenContinue: string,
+  maxReadCognitoLoops: number,
+  cognitoGroupsOperationsPerSec: number,
+  dependencies: dependencies,
+) {
+  let paginationToken: string = paginationTokenContinue;
+  let cognitoResponse: PromiseResult<CognitoIdentityServiceProvider.ListUsersResponse, AWSError>;
+  let counter = 0;
+  let currentIteration = 1;
+  do {
+    const readUsersTresholder = sleep(1000); // creates async timer that we'd await later
+
+    cognitoResponse = await dependencies.cognitoService.listUsers(paginationToken);
+    console.info(`===>> paginationToken iterations: ${paginationToken}`);
+    paginationToken = cognitoResponse.PaginationToken;
+    // console.log(cognitoResponse.Users);
+
+    /**
+     * - map each user operation to a promise
+     * - chain each promise with reduce
+     * - await reduced return before next batch
+     */
+    await cognitoResponse.Users.map(async (user) => {
+      const roles = await dependencies.databaseService.getUserRoles(user.Username);
+      // console.log(roles);
+      return { username: user.Username, roles };
+    }).reduce(async (previousPromise, currentUserPromise) => {
+      await previousPromise;
+      const { username, roles } = await currentUserPromise;
+      await dependencies.cognitoService.addUserToGroups(username, roles);
+      return await sleep(1000 / cognitoGroupsOperationsPerSec);
+    }, Promise.resolve());
+
+    await readUsersTresholder; // await in case all operations are processed before 1 second passes
+    currentIteration++;
+  } while (currentIteration <= maxReadCognitoLoops && cognitoResponse.$response.hasNextPage());
+  console.log('Users processed: ', counter);
 }
 
 interface dependencies {
@@ -427,7 +446,7 @@ interface csvUser {
   groups: string[];
 }
 
-async function mainCsvInput(
+async function withCsvInput(
   filePath: string,
   cognitoReadLimit: number,
   cognitoGroupsOperationsPerSec: number,
@@ -456,8 +475,6 @@ async function mainCsvInput(
           await dependencies.cognitoService.addUserToGroups(username, roles);
           return await sleep(1000 / cognitoGroupsOperationsPerSec);
         }, Promise.resolve());
-
-      // const bla = await someAsyncOperationToDoWithThoseChunks();
       console.log('drainning stream chunks');
       usersToProcess = [];
       console.log(`Finishing iteration ${iterationCounter}`);
